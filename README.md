@@ -4,23 +4,23 @@ Built using Node.js and Express.js.
 
 # Features
 
-📡 QR Code Connection – Easily connect phone to the server
+QR Code Connection – Easily connect phone to the server
 
-📤 Upload Files – Send files from phone or laptop
+Upload Files – Send files from phone or laptop
 
-📥 Download Files – Download files to any connected device
+Download Files – Download files to any connected device
 
-👁 View Files – Open images, PDFs, and other files in browser
+View Files – Open images, PDFs, and other files in browser
 
-📊 Upload Progress Bar
+Shows Progress Bar
 
-⚡ Transfer Speed Indicator
+Shows Transfer Speed Indicator
 
-🖱 Drag & Drop Upload
+Drag & Drop Upload
 
-📱 Mobile Responsive UI
+Mobile Responsive UI
 
-🌐 Works Offline (Same WiFi Network)
+Works Offline (Same WiFi Network)
 
 # Technologies Used
 
@@ -43,10 +43,14 @@ Open the web page or scan the QR code from your phone.
 Upload or download files between devices connected to the same WiFi network.
 
 # Run the Project
+- in cmd type:
+
 npm install
+
+
 node server.js
 
-Then open:
+- Then open:
 
 http://localhost:3000
 
@@ -54,8 +58,13 @@ or scan the QR code from your phone.
 
 # Project Structure
 wifi-share
+
 │
+
 ├── server.js
+
 ├── uploads
+
 └── public
+
      └── index.html
