@@ -1,14 +1,17 @@
 const express = require("express")
-const fileUpload = require("express-fileupload")
-const fs = require("fs")
 const QRCode = require("qrcode")
 const os = require("os")
 
+const http = require("http")
+const { Server } = require("socket.io")
+
 const app = express()
 
-app.use(fileUpload())
+const server = http.createServer(app)
+
+const io = new Server(server)
+
 app.use(express.static("public"))
-app.use("/uploads", express.static("uploads"))
 
 function getLocalIP(){
 
@@ -29,6 +32,7 @@ return net.address
 app.get("/qr", async (req,res)=>{
 
 const ip = getLocalIP()
+
 const url = `http://${ip}:3000`
 
 const qr = await QRCode.toDataURL(url)
@@ -37,26 +41,68 @@ res.send({url,qr})
 
 })
 
-app.post("/upload",(req,res)=>{
+/* ---------- SOCKET.IO ---------- */
 
-if(!req.files) return res.send("No file")
+let users = {}
 
-const file = req.files.file
+io.on("connection",(socket)=>{
 
-file.mv("./uploads/"+file.name)
+users[socket.id] = {
+id: socket.id,
+name: "Unknown Device"
+}
 
-res.send("Uploaded")
+io.emit("users", Object.values(users))
+
+console.log("Device connected:", socket.id)
+
+socket.on("set-name",(name)=>{
+
+users[socket.id].name = name
+
+io.emit("users", Object.values(users))
 
 })
 
-app.get("/files",(req,res)=>{
+socket.on("offer",(data)=>{
 
-fs.readdir("./uploads",(err,files)=>{
-res.json(files)
+io.to(data.target).emit("offer",{
+offer:data.offer,
+from:socket.id
 })
 
 })
 
-app.listen(3000,()=>{
-console.log("Server running on port 3000")
+socket.on("answer",(data)=>{
+
+io.to(data.target).emit("answer",{
+answer:data.answer
+})
+
+})
+
+socket.on("ice-candidate",(data)=>{
+
+io.to(data.target).emit("ice-candidate",{
+candidate:data.candidate
+})
+
+})
+
+socket.on("disconnect",()=>{
+
+delete users[socket.id]
+
+io.emit("users", Object.values(users))
+
+console.log("Device disconnected")
+
+})
+
+})
+
+const PORT = process.env.PORT || 3000
+
+server.listen(PORT,()=>{
+console.log("Server running on port", PORT)
 })

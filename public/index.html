@@ -68,25 +68,20 @@ border-radius:10px;
 color:#555;
 }
 
-ul{
-list-style:none;
-padding:0;
+.device{
+background:#f5f5f5;
+padding:12px;
+border-radius:10px;
 margin-top:10px;
+font-weight:bold;
 }
 
-.file{
-border-bottom:1px solid #eee;
-padding:10px 0;
-}
-
-.file-buttons{
-display:flex;
-gap:8px;
-margin-top:6px;
-}
-
-.file-buttons button{
-flex:1;
+.download-link{
+display:block;
+margin-top:15px;
+font-weight:bold;
+color:#2c8cff;
+text-decoration:none;
 }
 
 </style>
@@ -99,19 +94,25 @@ flex:1;
 
 <h1>📡 WiFi Share</h1>
 
-<h3>Connect Phone</h3>
+<h3>Connect Devices</h3>
 
 <img id="qr" width="150">
 
 <p id="url"></p>
 
-<h3>Upload File</h3>
+<h3>Available Devices</h3>
+
+<div id="devices"></div>
+
+<h3>Send File</h3>
 
 <input type="file" id="file">
 
 <br>
 
-<button onclick="upload()">Upload</button>
+<button onclick="sendSelectedFile()">
+Send File
+</button>
 
 <div class="dropzone" id="dropzone">
 Drag & Drop file here
@@ -121,26 +122,271 @@ Drag & Drop file here
 
 <p id="speed">Speed: 0 MB/s</p>
 
-<h3>Files</h3>
-
-<button onclick="loadFiles()">Refresh Files</button>
-
-<ul id="list"></ul>
+<div id="downloads"></div>
 
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
+
 <script>
+
+const socket = io()
+
+let deviceName = prompt("Enter device name")
+
+if(!deviceName){
+deviceName = "Unknown Device"
+}
+
+socket.emit("set-name", deviceName)
+
+/* ---------- QR ---------- */
 
 fetch("/qr")
 .then(res=>res.json())
 .then(data=>{
-document.getElementById("qr").src=data.qr
-document.getElementById("url").innerText=data.url
+
+document.getElementById("qr").src = data.qr
+document.getElementById("url").innerText = data.url
+
 })
 
-function upload(){
+/* ---------- WEBRTC ---------- */
 
-let file=document.getElementById("file").files[0]
+let peerConnection
+let dataChannel
+
+const configuration = {
+iceServers:[
+{
+urls:"stun:stun.l.google.com:19302"
+}
+]
+}
+
+/* ---------- DEVICE LIST ---------- */
+
+socket.on("users",(users)=>{
+
+let devices = document.getElementById("devices")
+
+devices.innerHTML = ""
+
+users.forEach(user=>{
+
+if(user.id === socket.id) return
+
+let div = document.createElement("div")
+
+div.className = "device"
+
+div.innerHTML = `
+📱 ${user.name}
+<br>
+<button onclick="connectDevice('${user.id}')">
+Connect
+</button>
+`
+
+devices.appendChild(div)
+
+})
+
+})
+
+/* ---------- CONNECT ---------- */
+
+function connectDevice(id){
+
+createPeer(id)
+
+alert("Connection request sent!")
+
+}
+
+/* ---------- FILE RECEIVE ---------- */
+
+let receivedBuffers = []
+
+let receivedFileInfo = null
+
+function setupDataChannel(channel){
+
+dataChannel = channel
+
+dataChannel.onopen = ()=>{
+
+alert("✅ Devices connected directly!")
+
+}
+
+dataChannel.onmessage = (event)=>{
+
+if(typeof event.data === "string"){
+
+const msg = JSON.parse(event.data)
+
+if(msg.type === "file-info"){
+
+receivedFileInfo = msg
+
+receivedBuffers = []
+
+}
+
+}else{
+
+receivedBuffers.push(event.data)
+
+const receivedBlob = new Blob(
+receivedBuffers,
+{
+type: receivedFileInfo.mime
+}
+)
+
+if(receivedBlob.size >= receivedFileInfo.size){
+
+const url = URL.createObjectURL(receivedBlob)
+
+const link = document.createElement("a")
+
+link.href = url
+
+link.download = receivedFileInfo.name
+
+link.className = "download-link"
+
+link.innerText =
+"⬇ Download " + receivedFileInfo.name
+
+document
+.getElementById("downloads")
+.appendChild(link)
+
+}
+
+}
+
+}
+
+}
+
+/* ---------- CREATE PEER ---------- */
+
+async function createPeer(targetId){
+
+peerConnection =
+new RTCPeerConnection(configuration)
+
+const channel =
+peerConnection.createDataChannel("fileTransfer")
+
+setupDataChannel(channel)
+
+peerConnection.onicecandidate = (event)=>{
+
+if(event.candidate){
+
+socket.emit("ice-candidate",{
+target: targetId,
+candidate: event.candidate
+})
+
+}
+
+}
+
+const offer =
+await peerConnection.createOffer()
+
+await peerConnection
+.setLocalDescription(offer)
+
+socket.emit("offer",{
+target: targetId,
+offer
+})
+
+}
+
+/* ---------- RECEIVE OFFER ---------- */
+
+socket.on("offer", async (data)=>{
+
+peerConnection =
+new RTCPeerConnection(configuration)
+
+peerConnection.ondatachannel = (event)=>{
+
+setupDataChannel(event.channel)
+
+}
+
+peerConnection.onicecandidate = (event)=>{
+
+if(event.candidate){
+
+socket.emit("ice-candidate",{
+target:data.from,
+candidate:event.candidate
+})
+
+}
+
+}
+
+await peerConnection.setRemoteDescription(
+new RTCSessionDescription(data.offer)
+)
+
+const answer =
+await peerConnection.createAnswer()
+
+await peerConnection
+.setLocalDescription(answer)
+
+socket.emit("answer",{
+target:data.from,
+answer
+})
+
+})
+
+/* ---------- RECEIVE ANSWER ---------- */
+
+socket.on("answer", async (data)=>{
+
+await peerConnection.setRemoteDescription(
+new RTCSessionDescription(data.answer)
+)
+
+})
+
+/* ---------- ICE ---------- */
+
+socket.on("ice-candidate", async (data)=>{
+
+try{
+
+await peerConnection.addIceCandidate(
+new RTCIceCandidate(data.candidate)
+)
+
+}catch(err){
+
+console.log(err)
+
+}
+
+})
+
+/* ---------- SEND FILE ---------- */
+
+function sendSelectedFile(){
+
+const file =
+document.getElementById("file").files[0]
 
 sendFile(file)
 
@@ -148,92 +394,80 @@ sendFile(file)
 
 function sendFile(file){
 
-let formData=new FormData()
+if(!dataChannel ||
+dataChannel.readyState !== "open"){
 
-formData.append("file",file)
+alert("Connect device first!")
 
-let xhr=new XMLHttpRequest()
-
-let startTime=new Date().getTime()
-
-xhr.upload.onprogress=function(e){
-
-let percent=(e.loaded/e.total)*100
-
-document.getElementById("progress").value=percent
-
-let currentTime=new Date().getTime()
-
-let elapsed=(currentTime-startTime)/1000
-
-let speed=(e.loaded/elapsed)/1024/1024
-
-document.getElementById("speed").innerText=
-"Speed: "+speed.toFixed(2)+" MB/s"
+return
 
 }
 
-xhr.open("POST","/upload")
+const chunkSize = 16 * 1024
 
-xhr.send(formData)
+let offset = 0
 
-}
+const reader = new FileReader()
 
-function loadFiles(){
+const startTime = new Date().getTime()
 
-fetch("/files")
-.then(res=>res.json())
-.then(files=>{
+dataChannel.send(JSON.stringify({
+type:"file-info",
+name:file.name,
+size:file.size,
+mime:file.type
+}))
 
-let list=document.getElementById("list")
+reader.onload = (event)=>{
 
-list.innerHTML=""
+dataChannel.send(event.target.result)
 
-files.forEach(f=>{
+offset += event.target.result.byteLength
 
-let li=document.createElement("li")
-li.className="file"
+let percent = (offset/file.size)*100
 
-let name=document.createElement("div")
-name.innerText=f
+document.getElementById("progress").value =
+percent
 
-let btnBox=document.createElement("div")
-btnBox.className="file-buttons"
+let currentTime = new Date().getTime()
 
-let viewBtn=document.createElement("button")
-viewBtn.innerText="View"
+let elapsed = (currentTime-startTime)/1000
 
-viewBtn.onclick=function(){
-window.open("/uploads/"+f,"_blank")
-}
+let speed =
+(offset/elapsed)/1024/1024
 
-let downloadBtn=document.createElement("button")
-downloadBtn.innerText="Download"
+document.getElementById("speed").innerText =
+"Speed: " + speed.toFixed(2) + " MB/s"
 
-downloadBtn.onclick=function(){
+if(offset < file.size){
 
-let link=document.createElement("a")
-link.href="/uploads/"+f
-link.download=f
-link.click()
+readSlice(offset)
 
-}
+}else{
 
-btnBox.appendChild(viewBtn)
-btnBox.appendChild(downloadBtn)
-
-li.appendChild(name)
-li.appendChild(btnBox)
-
-list.appendChild(li)
-
-})
-
-})
+alert("✅ File sent!")
 
 }
 
-const dropzone=document.getElementById("dropzone")
+}
+
+function readSlice(o){
+
+const slice =
+file.slice(offset, o + chunkSize)
+
+reader.readAsArrayBuffer(slice)
+
+}
+
+readSlice(0)
+
+}
+
+/* ---------- DRAG DROP ---------- */
+
+const dropzone =
+document.getElementById("dropzone")
 
 dropzone.addEventListener("dragover",e=>{
 e.preventDefault()
@@ -243,7 +477,7 @@ dropzone.addEventListener("drop",e=>{
 
 e.preventDefault()
 
-const file=e.dataTransfer.files[0]
+const file = e.dataTransfer.files[0]
 
 sendFile(file)
 
