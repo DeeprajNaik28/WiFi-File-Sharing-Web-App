@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>WiFi Share</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+
+body{
+font-family:Arial;
+background:linear-gradient(135deg,#4facfe,#00f2fe);
+display:flex;
+justify-content:center;
+align-items:flex-start;
+min-height:100vh;
+padding-top:40px;
+margin:0;
+}
+
+.container{
+background:white;
+padding:25px;
+border-radius:12px;
+width:90%;
+max-width:420px;
+text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,0.2);
+margin-bottom:40px;
+}
+
+h1{
+margin-bottom:10px;
+}
+
+button{
+background:#4facfe;
+color:white;
+border:none;
+padding:12px 20px;
+border-radius:8px;
+cursor:pointer;
+margin-top:8px;
+font-size:15px;
+}
+
+button:hover{
+background:#2c8cff;
+}
+
+input{
+margin-top:10px;
+}
+
+progress{
+width:100%;
+height:15px;
+margin-top:10px;
+}
+
+.dropzone{
+border:2px dashed #4facfe;
+padding:20px;
+margin-top:15px;
+border-radius:10px;
+color:#555;
+}
+
+ul{
+list-style:none;
+padding:0;
+margin-top:10px;
+}
+
+.file{
+border-bottom:1px solid #eee;
+padding:10px 0;
+}
+
+.file-buttons{
+display:flex;
+gap:8px;
+margin-top:6px;
+}
+
+.file-buttons button{
+flex:1;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>📡 WiFi Share</h1>
+
+<h3>Connect Phone</h3>
+
+<img id="qr" width="150">
+
+<p id="url"></p>
+
+<h3>Upload File</h3>
+
+<input type="file" id="file">
+
+<br>
+
+<button onclick="upload()">Upload</button>
+
+<div class="dropzone" id="dropzone">
+Drag & Drop file here
+</div>
+
+<progress id="progress" value="0" max="100"></progress>
+
+<p id="speed">Speed: 0 MB/s</p>
+
+<h3>Files</h3>
+
+<button onclick="loadFiles()">Refresh Files</button>
+
+<ul id="list"></ul>
+
+</div>
+
+<script>
+
+fetch("/qr")
+.then(res=>res.json())
+.then(data=>{
+document.getElementById("qr").src=data.qr
+document.getElementById("url").innerText=data.url
+})
+
+function upload(){
+
+let file=document.getElementById("file").files[0]
+
+sendFile(file)
+
+}
+
+function sendFile(file){
+
+let formData=new FormData()
+
+formData.append("file",file)
+
+let xhr=new XMLHttpRequest()
+
+let startTime=new Date().getTime()
+
+xhr.upload.onprogress=function(e){
+
+let percent=(e.loaded/e.total)*100
+
+document.getElementById("progress").value=percent
+
+let currentTime=new Date().getTime()
+
+let elapsed=(currentTime-startTime)/1000
+
+let speed=(e.loaded/elapsed)/1024/1024
+
+document.getElementById("speed").innerText=
+"Speed: "+speed.toFixed(2)+" MB/s"
+
+}
+
+xhr.open("POST","/upload")
+
+xhr.send(formData)
+
+}
+
+function loadFiles(){
+
+fetch("/files")
+.then(res=>res.json())
+.then(files=>{
+
+let list=document.getElementById("list")
+
+list.innerHTML=""
+
+files.forEach(f=>{
+
+let li=document.createElement("li")
+li.className="file"
+
+let name=document.createElement("div")
+name.innerText=f
+
+let btnBox=document.createElement("div")
+btnBox.className="file-buttons"
+
+let viewBtn=document.createElement("button")
+viewBtn.innerText="View"
+
+viewBtn.onclick=function(){
+window.open("/uploads/"+f,"_blank")
+}
+
+let downloadBtn=document.createElement("button")
+downloadBtn.innerText="Download"
+
+downloadBtn.onclick=function(){
+
+let link=document.createElement("a")
+link.href="/uploads/"+f
+link.download=f
+link.click()
+
+}
+
+btnBox.appendChild(viewBtn)
+btnBox.appendChild(downloadBtn)
+
+li.appendChild(name)
+li.appendChild(btnBox)
+
+list.appendChild(li)
+
+})
+
+})
+
+}
+
+const dropzone=document.getElementById("dropzone")
+
+dropzone.addEventListener("dragover",e=>{
+e.preventDefault()
+})
+
+dropzone.addEventListener("drop",e=>{
+
+e.preventDefault()
+
+const file=e.dataTransfer.files[0]
+
+sendFile(file)
+
+})
+
+</script>
+
+</body>
+
+</html>
