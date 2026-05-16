@@ -6,6 +6,14 @@ Built using Node.js, Express.js, Socket.IO, and WebRTC.
 
 ---
 
+# 🌍 Deployment
+
+This project is deployed on Render:
+
+https://wifi-file-sharing-web-app.onrender.com/
+
+---
+
 # 🚀 Features
 
 * 📱 Device discovery in real time
@@ -30,21 +38,6 @@ Built using Node.js, Express.js, Socket.IO, and WebRTC.
 * HTML
 * CSS
 * JavaScript
-
----
-
-# 📂 Project Structure
-
-```bash
-wifi-share
-│
-├── public
-│   └── index.html
-│
-├── server.js
-├── package.json
-└── package-lock.json
-```
 
 ---
 
@@ -82,18 +75,7 @@ http://localhost:3000
 
 ---
 
-# 🌍 Deployment
 
-This project can be deployed on platforms like:
-
-* Render
-* Railway
-
-Recommended platform:
-
-* Render
-
----
 
 # 📸 How It Works
 
@@ -102,20 +84,3 @@ Recommended platform:
 3. Connect to another device.
 4. Select or drag files.
 5. Share files directly between devices.
-
----
-
-# 📌 Future Improvements
-
-* Transfer accept/reject popup
-* Better transfer progress tracking
-* Improved device identification
-* Multiple device support
-* Better animations and UI
-* Faster chunk transfer system
-
----
-
-# 👨‍💻 Author
-
-Deepraj Naik
